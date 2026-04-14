@@ -1,6 +1,15 @@
-import torch
-import torch.nn as nn
-from typing import Dict
+"""
+Forward-hook utility for inspecting PyTorch tensor shapes at runtime.
+
+This module provides a singleton ``ShapeHook`` class that attaches forward
+hooks to every module of a PyTorch model.  Each hook prints the input and
+output tensor shapes when the module is called during a forward pass.  Hooks
+can be configured to fire only once (``one_time=True``), making them useful
+for a quick shape-trace without cluttering subsequent forward passes.
+"""
+
+import sys
+from typing import Any, Dict
 
 class ShapeHook:
     """
@@ -22,14 +31,20 @@ class ShapeHook:
         self._hooks: Dict[str, Dict] = {}
         self._one_time_mode = False
     
-    def register_hooks(self, model: nn.Module, one_time: bool = False) -> None:
+    def register_hooks(self, model: Any, one_time: bool = False) -> None:
         """
         Register hooks on all modules of a model to print tensor shapes.
         
         Args:
-            model (nn.Module): PyTorch model to register hooks on
-            one_time (bool): If True, hooks will be removed after they fire once
+            model: PyTorch nn.Module to register hooks on.
+            one_time (bool): If True, hooks will be removed after they fire once.
+
+        Raises:
+            ImportError: If PyTorch is not imported in the current environment.
         """
+        torch = sys.modules.get('torch')
+        if torch is None:
+            raise ImportError("PyTorch must be imported before registering ShapeHook hooks.")
         self._one_time_mode = one_time
         model_id = id(model)
         
@@ -44,20 +59,20 @@ class ShapeHook:
             
             def create_hook_fn(module_name, module_id):
                 def hook_fn(module, input, output):
+                    _torch = sys.modules.get('torch')
                     # print the input shape
                     print("ShapeHook for ", end="")
-                    if isinstance(input, torch.Tensor):  
+                    if _torch and isinstance(input, _torch.Tensor):  
                         print(f"{module_name: <15} in shape: {str(list(input.shape)): <30}", end="")
-                    elif isinstance(input, tuple) and all(isinstance(i, torch.Tensor) for i in input):
+                    elif isinstance(input, tuple) and _torch and all(isinstance(i, _torch.Tensor) for i in input):
                         shapes = [list(i.shape) for i in input]
                         print(f"{module_name: <15} in shapes: {str(shapes): <30}", end="")
                     else:
                         print(f"{module_name: <15} in type: {str(type(input)): <30}", end="")
                     
-                    
-                    if isinstance(output, torch.Tensor):
+                    if _torch and isinstance(output, _torch.Tensor):
                         print(f"out shape: {str(list(output.shape)): <30}")
-                    elif isinstance(output, tuple) and all(isinstance(o, torch.Tensor) for o in output):
+                    elif isinstance(output, tuple) and _torch and all(isinstance(o, _torch.Tensor) for o in output):
                         shapes = [list(o.shape) for o in output]
                         print(f"out shapes: {str(shapes): <30}")
                     else:
@@ -76,7 +91,7 @@ class ShapeHook:
             # store the handle in the hooks dictionary for later removal
             self._hooks[model_id][module_id] = handle
     
-    def remove_model_hooks(self, model: nn.Module) -> None:
+    def remove_model_hooks(self, model: Any) -> None:
         model_id = id(model)
         if model_id in self._hooks:
             for module_id, handle in list(self._hooks[model_id].items()):

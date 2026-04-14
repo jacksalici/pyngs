@@ -1,0 +1,300 @@
+# pystuff — LLM Reference
+
+A personal Python toolkit for PyTorch development. Provides four public
+symbols: PyStuff (unified entry point), Config, Logger, ShapeHook.
+Not a production library — minimal, focused, and easy to extend.
+
+Repository: https://github.com/jacksalici/pystuff
+Package name: pystuff
+Python: >= 3.11
+Install: pip install -e . (from source, not on PyPI)
+
+Torch is an OPTIONAL dependency. All classes use sys.modules.get('torch') at
+call time rather than importing at module level. The package imports cleanly
+without PyTorch. ShapeHook.register_hooks raises ImportError if torch is
+absent. Config.get_device returns "cpu" silently if torch is absent.
+
+
+## Module: pystuff — PyStuff (recommended entry point)
+
+Unified initialiser that creates the Config singleton and a Logger instance
+together under a shared project name.
+
+### Import
+
+    from pystuff import PyStuff
+
+### Constructor
+
+    PyStuff(
+        project_name: str,
+        log_level: "debug" | "info" | "warning" | "error" = "info",
+        report_to: "none" | "wb" | "tb" | "all" | None = None,
+        remote_logger_run_name: str | None = None,
+        tensorboard_log_dir: str = "./tb",
+        log_separator: str = "|",
+        log_multi_line: bool = True,
+    )
+
+### Attributes
+
+    ps.config  -> Config   # the global Config singleton
+    ps.logger  -> Logger   # the Logger for this project
+
+### Methods
+
+    ps.parse(args=None) -> PyStuff
+        Calls Config.instance().parse_cli_args(args). Returns self.
+        Pass [] in tests to avoid reading sys.argv.
+
+### Example
+
+    from pystuff import PyStuff, Config
+
+    @Config.configurable
+    class Trainer:
+        def __init__(self, lr=0.001, epochs=10):
+            self.lr, self.epochs = lr, epochs
+
+    ps = PyStuff("my_exp", report_to="tb")
+    ps.parse()                    # or ps.parse(["--trainer.lr", "0.1"])
+    ps.logger("Training started")
+    trainer = Trainer()           # lr/epochs injected from CLI
+    ps.logger({"loss": 0.42})
+    ps.logger.close()
+
+
+## Module: pystuff.shapehook — ShapeHook
+
+Singleton. Attaches PyTorch forward hooks that print input/output tensor
+shapes for every sub-module.
+
+### Import
+
+    from pystuff import ShapeHook
+
+### Constructor
+
+    ShapeHook()
+    # Returns the singleton; safe to call multiple times.
+
+### Methods
+
+    register_hooks(model, one_time: bool = False) -> None
+        Attach hooks to all named sub-modules of model.
+        model must be a torch.nn.Module (checked at runtime).
+        Raises ImportError if torch has not been imported yet.
+        one_time=True: each hook removes itself after its first invocation.
+
+    remove_model_hooks(model) -> None
+        Remove all hooks attached to model.
+
+    remove_all_models_hooks() -> None
+        Remove all hooks across all registered models.
+
+### Output format (printed to stdout)
+
+    ShapeHook for <ClassName>   in shapes: [[...]]   out shape: [...]
+
+### Example
+
+    model = nn.Sequential(nn.Conv2d(3, 32, 3, padding=1), nn.ReLU())
+    ShapeHook().register_hooks(model, one_time=True)
+    model(torch.randn(1, 3, 32, 32))
+
+
+## Module: pystuff.logger — Logger
+
+Callable class. Wraps Python logging with optional Weights & Biases and
+TensorBoard integration. Log strings or metric dicts at severity levels.
+
+### Import
+
+    from pystuff import Logger
+
+### Constructor
+
+    Logger(
+        project_name: str,
+        log_level: "debug" | "info" | "warning" | "error" = "info",
+        report_to: "none" | "wb" | "tb" | "all" | None = None,
+        remote_logger_run_name: str | None = None,
+        tensorboard_log_dir: str = "./tb",
+        separator: str = "|",
+        multi_line: bool = True,
+    )
+
+    report_to values:
+        "none" / None — console only
+        "wb"          — console + Weights & Biases (requires wandb)
+        "tb"          — console + TensorBoard (requires torch)
+        "all"         — console + W&B + TensorBoard
+
+### Calling
+
+    logger(info: dict | str, level: str = "info", step: int | None = None)
+        Log a string message or a dict of metrics.
+        step: explicit TensorBoard step; otherwise uses internal counter.
+
+### Other methods
+
+    logger.print_config(config_dict: dict) -> None
+        Log the config to console, W&B, and/or TensorBoard.
+
+    logger.close() -> None
+        Finish W&B run and close TensorBoard writer. Call at end of training.
+
+### Example
+
+    logger = Logger("my_project", log_level="info", report_to="tb")
+    logger("Epoch started", level="info")
+    logger({"loss": 0.42, "acc": 0.91})
+    logger.close()
+
+
+## Module: pystuff.config — Config
+
+Singleton class. Central configuration manager combining:
+- CLI argument parsing (argparse)
+- YAML file loading
+- Automatic __init__ injection via @Config.configurable decorator
+
+### Import
+
+    from pystuff import Config
+
+### Singleton access
+
+    Config.instance() -> Config   # get (or create) the global singleton
+    Config.reset()    -> Config   # destroy and recreate (use in tests)
+
+### Decorator: @Config.configurable
+
+Registers all __init__ parameters (except self, *args, **kwargs) as
+namespaced argparse flags at import time. At instantiation, missing arguments
+are filled from the parsed config; explicit arguments always win.
+
+    @Config.configurable
+    class MyClass:
+        def __init__(self, param=default_value, ...):
+            ...
+    # Registers: --myclassname.param
+
+    @Config.configurable(prefix="custom")
+    class MyClass:
+        ...
+    # Registers: --custom.param
+
+    Rules:
+    - Default prefix = cls.__name__.lower()
+    - Duplicate prefixes raise ValueError at decoration time
+    - *args and **kwargs are silently ignored
+    - Parameters with no default are registered with default=None;
+      if also missing from CLI, the original TypeError is raised at __init__
+
+### Parsing (call once in entry point, after all imports)
+
+    Config.instance().parse_cli_args()         # reads sys.argv
+    Config.instance().parse_cli_args([...])    # explicit list (tests)
+
+### Manual argument registration
+
+    cfg.add_argument(
+        name: str,
+        default: Any = None,
+        arg_type: type = str,
+        help_text: str = "",
+    )
+
+    cfg.add_arguments_from_dict({
+        "lr":     {"default": 0.001, "arg_type": float},
+        "epochs": {"default": 10,    "arg_type": int},
+    })
+
+### YAML support
+
+    cfg.load_from_yaml(path: str)              # merge one file
+    cfg.load_from_multiple_yamls(paths: list)  # merge multiple files
+    cfg.save_to_yaml(path: str)                # persist current config
+
+    Load order: YAML → parse_cli_args. CLI values override YAML.
+
+### Value access
+
+    cfg.get(key: str, default=None) -> Any
+    cfg.update_config(updates: dict)
+
+### PyTorch helpers
+
+    cfg.get_device() -> "cuda" | "mps" | "cpu"
+        Reads config key "device" ("auto", "cuda", or "mps").
+        Returns "cpu" silently if torch is not in sys.modules (no error).
+
+    cfg.get_checkpoint_path() -> str
+        Reads "checkpoint_path", "checkpoint_name", "model_name".
+        Creates the directory if absent.
+
+    cfg.ensure_directory(path: str)
+        os.makedirs(path) if not exists.
+
+### Full example
+
+    # my_classes.py
+    from pystuff import Config
+
+    @Config.configurable
+    class Trainer:
+        def __init__(self, lr=0.001, epochs=10):
+            self.lr = lr
+            self.epochs = epochs
+
+    @Config.configurable(prefix="opt")
+    class Optimizer:
+        def __init__(self, lr=0.01):
+            self.lr = lr
+
+    # main.py
+    from my_classes import Trainer, Optimizer
+    from pystuff import Config
+
+    cfg = Config.instance()
+    cfg.load_from_yaml("config.yaml")   # optional
+    cfg.parse_cli_args()
+
+    trainer   = Trainer()          # filled from CLI / YAML / defaults
+    optimizer = Optimizer(lr=1e-3) # explicit arg overrides config
+
+    # python main.py --trainer.lr 0.1 --trainer.epochs 50 --opt.lr 0.005
+
+
+## File layout
+
+    src/pystuff/
+        __init__.py      # exports: PyStuff, Config, Logger, ShapeHook
+        config.py        # Config class (singleton + decorator)
+        logger.py        # Logger class
+        shapehook.py     # ShapeHook class (singleton)
+    tests/
+        test_config.py   # unittest suite for Config and @Config.configurable
+        test.py          # manual tests for Logger and ShapeHook
+    pyproject.toml
+    README.md
+    llms.txt             # this file
+
+
+## Key conventions
+
+- PyStuff is the recommended entry point; it wires Config and Logger together
+  under a shared project name with one constructor call.
+- torch is optional everywhere. No top-level torch import anywhere in the
+  package. sys.modules.get('torch') is used at call time.
+- Config is a singleton. Config.instance() always returns the same object;
+  ps.config is identical to Config.instance().
+- Config.reset() destroys the singleton and creates a fresh one (use in tests).
+- @Config.configurable registers params at DECORATION time (import time).
+  Call ps.parse() / parse_cli_args() AFTER all decorated classes are imported
+  and BEFORE instantiating them if you rely on CLI injection.
+- CLI flags use dot notation: --<prefix>.<param>. The dot is part of the key.
+- CLI-injected values are plain strings. Use add_argument(arg_type=...) or
+  add_arguments_from_dict for coercion. @Config.configurable does NOT coerce.
+- wandb and TensorBoard are optional. Logger degrades gracefully if absent.
