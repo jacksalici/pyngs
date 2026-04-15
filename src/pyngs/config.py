@@ -81,7 +81,7 @@ class Config:
     # Argument registration
     # ------------------------------------------------------------------
 
-    def add_argument(self, name: str, default: Any = None, arg_type: type = str, help_text: str = ""):
+    def add_argument(self, name: str, default: Any = None, arg_type: type = str, help_text: str = "", **kwargs):
         """Register a single typed CLI argument.
 
         Args:
@@ -89,8 +89,10 @@ class Config:
             default: Default value when the flag is not provided.
             arg_type: Type callable used by argparse to coerce the string value.
             help_text: Description shown in ``--help`` output.
+            **kwargs: Additional keyword arguments passed to
+                      ``argparse.ArgumentParser.add_argument``.
         """
-        self._parser.add_argument(f"--{name}", type=arg_type, default=default, help=help_text)
+        self._parser.add_argument(f"--{name}", type=arg_type, default=default, help=help_text, **kwargs)
         self.config[name] = default
 
     def add_arguments_from_dict(self, arguments: Dict[str, Dict[str, Any]]):
