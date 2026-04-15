@@ -4,14 +4,15 @@
 
 > Not a production library — a personal toolkit that fits my needs. Simpler alternatives exist for each tool, but this keeps everything in one place.
 
-> **torch is optional** — all classes check `sys.modules` at call time rather than at import time, so the package imports cleanly without PyTorch installed.
-
 ## Tools 🛠️
 
 - [PyStuff 🚀](#pystuff-) — unified entry point
-- [Shape Hooks 🪝](#shape-hooks-)
 - [Logger 📜](#logger-)
 - [Config ⚙️](#config-️)
+
+### 🧑‍🔬 Experimental:
+- [Shape Hooks 🪝](#shape-hooks-)
+
 
 ---
 
@@ -34,48 +35,13 @@ ps.config                       # → Config singleton
 ps.logger                       # → Logger instance
 ```
 
-`ps.parse()` accepts an explicit list for testing: `ps.parse(["--trainer.lr", "0.1"])`.
-
----
-
-### Shape Hooks 🪝
-
-Attaches forward hooks to every module in a PyTorch model and prints input/output tensor shapes on each forward pass. Hooks can be set to fire **once only** (`one_time=True`), making them useful for a quick shape-trace without cluttering subsequent passes.
-
-```python
-from pystuff import ShapeHook
-import torch
-from torch import nn
-
-model = nn.Sequential(
-    nn.Conv2d(3, 32, kernel_size=3, padding=1),
-    nn.ReLU(),
-    nn.MaxPool2d(2),
-    nn.Flatten(),
-    nn.Linear(32 * 16 * 16, 10),
-)
-
-hook_manager = ShapeHook()
-hook_manager.register_hooks(model, one_time=True)
-
-output = model(torch.randn(1, 3, 32, 32))
-```
-
-```
-ShapeHook for Conv2d     in shapes: [[1, 3, 32, 32]]      out shape: [1, 32, 32, 32]
-ShapeHook for ReLU       in shapes: [[1, 32, 32, 32]]     out shape: [1, 32, 32, 32]
-ShapeHook for MaxPool2d  in shapes: [[1, 32, 32, 32]]     out shape: [1, 32, 16, 16]
-ShapeHook for Flatten    in shapes: [[1, 32, 16, 16]]     out shape: [1, 8192]
-ShapeHook for Linear     in shapes: [[1, 8192]]           out shape: [1, 10]
-```
-
-`ShapeHook` is a singleton — calling `ShapeHook()` anywhere returns the same instance.
+`ps.parse()` accepts an explicit list for testing: `ps.parse(["--trainer.lr", "0.1"])`
 
 ---
 
 ### Logger 📜
 
-A flexible logging interface that combines Python's `logging` with optional **Weights & Biases** and **TensorBoard** integration. Log strings or metric dicts at different severity levels; only messages at or above the configured level reach the console.
+A **singleton** logging interface that combines Python's `logging` with optional **Weights & Biases** and **TensorBoard** integration. Log strings or metric dicts at different severity levels; only messages at or above the configured level reach the console. Calling `Logger()` multiple times returns the same instance.
 
 ```python
 from pystuff import Logger
@@ -108,7 +74,7 @@ logger.close()
 
 ### Config ⚙️
 
-A singleton configuration manager that combines **CLI argument parsing** (`argparse`), **YAML loading**, and **automatic `__init__` injection** via the `@Config.configurable` class decorator — all in one `Config` class.
+A **singleton** configuration manager that combines **CLI argument parsing** (`argparse`), **YAML loading**, and **automatic `__init__` injection** via the `@Config.configurable` class decorator — all in one `Config` class. Calling `Config.instance()` or `Config()` always returns the same instance.
 
 #### How it works
 
@@ -177,6 +143,41 @@ cfg.parse_cli_args()
 | `cfg.get_device()` | Auto-detect `cuda` / `mps` / `cpu` (returns `"cpu"` silently if torch not imported) |
 | `cfg.get_checkpoint_path()` | Resolve checkpoint path, creating dirs |
 | `Config.reset()` | Reset singleton (useful in tests) |
+
+---
+
+### Shape Hooks 🪝
+
+Attaches forward hooks to every module in a PyTorch model and prints input/output tensor shapes on each forward pass. Hooks can be set to fire **once only** (`one_time=True`), making them useful for a quick shape-trace without cluttering subsequent passes.
+
+```python
+from pystuff import ShapeHook
+import torch
+from torch import nn
+
+model = nn.Sequential(
+    nn.Conv2d(3, 32, kernel_size=3, padding=1),
+    nn.ReLU(),
+    nn.MaxPool2d(2),
+    nn.Flatten(),
+    nn.Linear(32 * 16 * 16, 10),
+)
+
+hook_manager = ShapeHook()
+hook_manager.register_hooks(model, one_time=True)
+
+output = model(torch.randn(1, 3, 32, 32))
+```
+
+```
+ShapeHook for Conv2d     in shapes: [[1, 3, 32, 32]]      out shape: [1, 32, 32, 32]
+ShapeHook for ReLU       in shapes: [[1, 32, 32, 32]]     out shape: [1, 32, 32, 32]
+ShapeHook for MaxPool2d  in shapes: [[1, 32, 32, 32]]     out shape: [1, 32, 16, 16]
+ShapeHook for Flatten    in shapes: [[1, 32, 16, 16]]     out shape: [1, 8192]
+ShapeHook for Linear     in shapes: [[1, 8192]]           out shape: [1, 10]
+```
+
+`ShapeHook` is a singleton — calling `ShapeHook()` anywhere returns the same instance.
 
 ---
 

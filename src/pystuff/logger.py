@@ -15,9 +15,11 @@ from typing import Any, Dict, Literal
 
 class Logger:
     """
-    Provides console logging with optional Weights & Biases and TensorBoard integration.
+    Singleton that provides console logging with optional Weights & Biases and TensorBoard integration.
     """
 
+    _instance = None
+    
     _logging_levels = {
         "debug": logging.DEBUG,
         "info": logging.INFO,
@@ -27,6 +29,12 @@ class Logger:
 
     _wandb = None
     _tb_writer = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(Logger, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
 
     def __init__(
         self,
@@ -50,7 +58,10 @@ class Logger:
             separator: Separator used in log dict messages. Defaults to "|".
             multi_line: If True, formats log dict messages in multiple lines. Defaults to True.
         """
+        if self._initialized:
+            return
 
+        self._initialized = True
         self.logger = logging.getLogger(project_name)
         self.logger.setLevel(self._logging_levels.get(log_level, logging.INFO))
         self.separator = separator
@@ -175,6 +186,22 @@ class Logger:
         
         if self._tb_writer:
             self._tb_writer.close()
+
+    # ------------------------------------------------------------------
+    # Singleton access
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def instance(cls) -> 'Logger':
+        """Return the global singleton, creating it on first call."""
+        return cls()
+
+    @classmethod
+    def reset(cls) -> 'Logger':
+        """Reset and return a fresh singleton. Useful in tests."""
+        cls._instance = None
+        cls._instance = cls()
+        return cls._instance
 
     def _init_wandb(self, project_name: str, remote_logger_run_name: str | None = None):
         try:

@@ -17,7 +17,7 @@ absent. Config.get_device returns "cpu" silently if torch is absent.
 
 ## Module: pystuff — PyStuff (recommended entry point)
 
-Unified initialiser that creates the Config singleton and a Logger instance
+Unified initialiser that creates the Config singleton and a Logger singleton
 together under a shared project name.
 
 ### Import
@@ -39,7 +39,7 @@ together under a shared project name.
 ### Attributes
 
     ps.config  -> Config   # the global Config singleton
-    ps.logger  -> Logger   # the Logger for this project
+    ps.logger  -> Logger   # the Logger singleton for this project
 
 ### Methods
 
@@ -73,10 +73,11 @@ shapes for every sub-module.
 
     from pystuff import ShapeHook
 
-### Constructor
+### Singleton access
 
-    ShapeHook()
-    # Returns the singleton; safe to call multiple times.
+    ShapeHook()               # get (or create) the singleton
+    ShapeHook.instance()      # alternative; same as ShapeHook()
+    ShapeHook.reset()         # destroy and recreate (use in tests)
 
 ### Methods
 
@@ -105,12 +106,19 @@ shapes for every sub-module.
 
 ## Module: pystuff.logger — Logger
 
-Callable class. Wraps Python logging with optional Weights & Biases and
+Singleton class. Wraps Python logging with optional Weights & Biases and
 TensorBoard integration. Log strings or metric dicts at severity levels.
+Calling Logger() multiple times returns the same instance.
 
 ### Import
 
     from pystuff import Logger
+
+### Singleton access
+
+    Logger()                     # get (or create) the singleton
+    Logger.instance()            # alternative; same as Logger()
+    Logger.reset()               # destroy and recreate (use in tests)
 
 ### Constructor
 
@@ -158,6 +166,7 @@ Singleton class. Central configuration manager combining:
 - CLI argument parsing (argparse)
 - YAML file loading
 - Automatic __init__ injection via @Config.configurable decorator
+Calling Config() multiple times returns the same instance.
 
 ### Import
 
@@ -165,8 +174,9 @@ Singleton class. Central configuration manager combining:
 
 ### Singleton access
 
-    Config.instance() -> Config   # get (or create) the global singleton
-    Config.reset()    -> Config   # destroy and recreate (use in tests)
+    Config()                  # get (or create) the global singleton
+    Config.instance()         # alternative; same as Config()
+    Config.reset()            # destroy and recreate (use in tests)
 
 ### Decorator: @Config.configurable
 
@@ -288,9 +298,14 @@ are filled from the parsed config; explicit arguments always win.
   under a shared project name with one constructor call.
 - torch is optional everywhere. No top-level torch import anywhere in the
   package. sys.modules.get('torch') is used at call time.
-- Config is a singleton. Config.instance() always returns the same object;
-  ps.config is identical to Config.instance().
-- Config.reset() destroys the singleton and creates a fresh one (use in tests).
+- **Singleton pattern**: Config, Logger, and ShapeHook all use the same
+  __new__() / __init__() pattern. Calling Config(), Logger(), or ShapeHook()
+  multiple times returns the same instance. Each supports instance() and
+  reset() class methods for consistent singleton access; reset() destroys
+  and recreates (use in tests).
+- Config.instance() and Config() are equivalent (both return the singleton).
+  Logger.instance() and Logger() are equivalent (both return the singleton).
+  ShapeHook.instance() and ShapeHook() are equivalent.
 - @Config.configurable registers params at DECORATION time (import time).
   Call ps.parse() / parse_cli_args() AFTER all decorated classes are imported
   and BEFORE instantiating them if you rely on CLI injection.
@@ -298,3 +313,4 @@ are filled from the parsed config; explicit arguments always win.
 - CLI-injected values are plain strings. Use add_argument(arg_type=...) or
   add_arguments_from_dict for coercion. @Config.configurable does NOT coerce.
 - wandb and TensorBoard are optional. Logger degrades gracefully if absent.
+

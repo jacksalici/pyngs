@@ -31,6 +31,22 @@ class ShapeHook:
         self._hooks: Dict[str, Dict] = {}
         self._one_time_mode = False
     
+    # ------------------------------------------------------------------
+    # Singleton access
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def instance(cls) -> 'ShapeHook':
+        """Return the global singleton, creating it on first call."""
+        return cls()
+
+    @classmethod
+    def reset(cls) -> 'ShapeHook':
+        """Reset and return a fresh singleton. Useful in tests."""
+        cls._instance = None
+        cls._instance = cls()
+        return cls._instance
+    
     def register_hooks(self, model: Any, one_time: bool = False) -> None:
         """
         Register hooks on all modules of a model to print tensor shapes.

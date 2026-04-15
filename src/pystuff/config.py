@@ -44,7 +44,17 @@ class Config:
 
     _instance: Optional['Config'] = None
 
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(Config, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
     def __init__(self, log=None):
+        if self._initialized:
+            return
+
+        self._initialized = True
         self.config: Dict[str, Any] = {}
         self._parser = argparse.ArgumentParser(description="Application Configuration")
         self._parsed = False
@@ -58,13 +68,12 @@ class Config:
     @classmethod
     def instance(cls) -> 'Config':
         """Return the global singleton, creating it on first call."""
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
+        return cls()
 
     @classmethod
     def reset(cls) -> 'Config':
         """Reset and return a fresh singleton. Useful in tests."""
+        cls._instance = None
         cls._instance = cls()
         return cls._instance
 
