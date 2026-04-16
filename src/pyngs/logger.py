@@ -43,6 +43,10 @@ class Logger:
         report_to: Literal["all","wb", "tb", "none"] | None = None,
         remote_logger_run_name: str | None = None,
         tensorboard_log_dir: str = "./tb",
+        wandb_log_dir: str = "./wandb",
+        wandb_entity: str | None = None,
+        wandb_group: str | None = None,
+        wandb_mode: Literal["online", "offline", "disabled"] = "online",
         separator: str = "|",
         multi_line: bool = True,
     ):
@@ -69,8 +73,7 @@ class Logger:
         self._step = 0  # Track steps for TensorBoard
 
         if not self.logger.handlers:
-            #handler = logging.StreamHandler()
-            handler = logging.NullHandler()
+            handler = logging.StreamHandler()
             formatter = logging.Formatter(
                 f"%(asctime)s [%(levelname)s] {separator} %(message)s"
             )
@@ -78,11 +81,11 @@ class Logger:
             self.logger.addHandler(handler)
 
         if report_to == "wb":
-            self._init_wandb(project_name, remote_logger_run_name)
+            self._init_wandb(project_name, remote_logger_run_name, wandb_log_dir, wandb_entity, wandb_group, wandb_mode)
         elif report_to == "tb":
             self._init_tensorboard(tensorboard_log_dir, remote_logger_run_name or project_name)
         elif report_to == "all":
-            self._init_wandb(project_name, remote_logger_run_name)
+            self._init_wandb(project_name, remote_logger_run_name, wandb_log_dir, wandb_entity, wandb_group, wandb_mode)
             self._init_tensorboard(tensorboard_log_dir, remote_logger_run_name or project_name)
         elif report_to is None or report_to == "none":
             self.logger.info("No remote logger selected; using console logging only.")
@@ -203,11 +206,11 @@ class Logger:
         cls._instance = cls()
         return cls._instance
 
-    def _init_wandb(self, project_name: str, remote_logger_run_name: str | None = None):
+    def _init_wandb(self, project_name: str, remote_logger_run_name: str | None = None, wandb_log_dir: str = "./wandb", wandb_entity: str | None = None, wandb_group: str | None = None, wandb_mode: Literal["online", "offline", "disabled"] = "online"):
         try:
             import wandb
 
-            wandb.init(project=project_name, name=remote_logger_run_name)
+            wandb.init(project=project_name, name=remote_logger_run_name, dir=wandb_log_dir, entity=wandb_entity, group=wandb_group, mode=wandb_mode)
             self._wandb = wandb
         except ImportError:
             self.logger.warning(
