@@ -137,12 +137,18 @@ ShapeHook for Linear     in shapes: [[1, 8192]]           out shape: [1, 10]
 
 ## Installation 🚀
 
-Not yet on PyPI. Install from source:
+### From source
 
 ```bash
 git clone https://github.com/jacksalici/pyngs
 cd pyngs
 pip install -e .
+```
+
+### From PyPI
+
+```bash
+pip install pyngs
 ```
 
 ## License
